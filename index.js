@@ -36,7 +36,24 @@ async function run() {
     await client.connect();
 
     const db=client.db('campcure_db');
-    const campsCollection = db.collection('camps')
+    const campsCollection = db.collection('camps');
+    const usersCollection = db.collection('users');
+
+
+    // user info
+    app.post('/users',async(req,res)=>{
+     const email = req.body.email;
+     const userInfo = req.body;
+     const ExistUser = await usersCollection.findOne({email});
+     
+     if(ExistUser){
+      return res.status(200).send({message:'User already exists',inserted:false});
+     };
+
+     const result = await usersCollection.insertOne(userInfo);
+     res.send(result);
+
+    })
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
