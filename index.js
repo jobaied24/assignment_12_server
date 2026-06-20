@@ -40,6 +40,13 @@ async function run() {
     const usersCollection = db.collection('users');
 
 
+app.post('/camps',async(req,res)=>{
+  const campData = req.body;
+  const result = await campsCollection.insertOne(campData);
+  res.send(result);
+});
+
+
     // user info
     app.post('/users',async(req,res)=>{
      const email = req.body.email;
