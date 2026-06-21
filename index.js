@@ -40,7 +40,50 @@ async function run() {
     const usersCollection = db.collection('users');
 
 
-app.post('/camps',async(req,res)=>{
+    // get all camps
+    app.get('/camps',async(req,res)=>{
+      const search = req.query.search;
+      const limit = parseInt(req.query.limit);
+      let query = {};
+
+      if(search){
+        query={
+          $or:[
+             {
+            campName:{
+                $regex: search,
+                $options:'i'
+              }
+            },
+            {
+              location:{
+                $regex: search,
+                $options: 'i'
+              }
+            },
+            {
+              healthcareProfessional:{
+                $regex: search,
+                $options: 'i'
+              }
+            }
+          ]
+        }
+      }
+
+      const cursor = await campsCollection.find(query);
+
+      if(limit){
+        cursor.limit(limit);
+      };
+
+      const result =await cursor.toArray();
+      res.send(result);
+    })
+
+
+    // Add Medical Camp
+app.post('/addCamps',async(req,res)=>{
   const campData = req.body;
   const result = await campsCollection.insertOne(campData);
   res.send(result);
