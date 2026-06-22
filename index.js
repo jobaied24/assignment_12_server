@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 dotenv.config();
 
 const app=express();
@@ -79,6 +79,15 @@ async function run() {
 
       const result =await cursor.toArray();
       res.send(result);
+    });
+
+
+    // specific camp data
+    app.get('/camps/:campId',async(req,res)=>{
+      const campId = req.params.campId;
+      const query = {_id: new ObjectId(campId)};
+      const result = await campsCollection.findOne(query);
+      res.send(result);  
     })
 
 
