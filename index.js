@@ -38,6 +38,7 @@ async function run() {
     const db=client.db('campcure_db');
     const campsCollection = db.collection('camps');
     const usersCollection = db.collection('users');
+    const campRegistrationCollection = db.collection('campRegistration');
 
 
     // get all camps
@@ -94,9 +95,34 @@ async function run() {
     // Add Medical Camp
 app.post('/addCamps',async(req,res)=>{
   const campData = req.body;
+
   const result = await campsCollection.insertOne(campData);
   res.send(result);
 });
+
+
+// save camp registration
+app.post('/campRegistration',async(req,res)=>{
+  const registrationData = req.body;
+    const {campId} = registrationData;
+  const query = {_id:new ObjectId(campId)};
+
+  // save camp registrationData
+  const result = await campRegistrationCollection.insertOne(registrationData);
+  
+  // update participent count
+  const updateDoc = {
+    $inc:{
+      participantCount: 1
+    }
+  };
+  
+  const countResult = await campsCollection.updateOne(query,updateDoc);
+  
+  res.send(result);
+});
+
+
 
 
     // user info
