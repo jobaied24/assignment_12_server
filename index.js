@@ -89,7 +89,18 @@ async function run() {
       const query = {_id: new ObjectId(campId)};
       const result = await campsCollection.findOne(query);
       res.send(result);  
-    })
+    });
+
+
+    // registered camp
+    app.get('/registeredCamp',async(req,res)=>{
+      const email = req.query.email;
+      const query = {
+        participantEmail:email
+      }
+      const result = await campRegistrationCollection.find(query).toArray();
+      res.send(result);
+    });
 
 
     // Add Medical Camp
