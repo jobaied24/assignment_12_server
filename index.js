@@ -149,7 +149,40 @@ app.post('/campRegistration',async(req,res)=>{
      const result = await usersCollection.insertOne(userInfo);
      res.send(result);
 
-    })
+    });
+
+
+    // cancel regestered camp
+    app.delete('/campRegistration/:id',async(req,res)=>{
+      const  id = req.params.id;
+      const query = {_id:new ObjectId(id)};
+
+        const registration = await campRegistrationCollection.findOne(query);
+
+  if (!registration) {
+    return res.status(404).send({
+      message: 'Registration not found'
+    });
+  }
+
+      const deleteResult = await campRegistrationCollection.deleteOne(query);
+      
+      // participantCount update
+      const campId = registration.campId;
+      const campQuery = {_id:new ObjectId(campId)};
+      
+      const updateDoc = {
+        $inc:{
+          participantCount: -1
+        }
+      };
+
+      await campsCollection.updateOne(campQuery,updateDoc);
+
+      res.send(deleteResult);
+
+    });
+
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
