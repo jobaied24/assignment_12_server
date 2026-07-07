@@ -2,10 +2,12 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const { default: Stripe } = require('stripe');
 dotenv.config();
 
 const app=express();
 const port = process.env.PORT || 5000;
+const stripe =require('stripe')(process.env.PAYMENT_SECRET_KEY);
 
 
 // midleWare
@@ -110,6 +112,22 @@ async function run() {
 
       const result = await campRegistrationCollection.findOne(query);
       res.send(result);
+    });
+
+
+    
+    // payment Intent
+    app.post("/create-payment-intent",async(req,res)=>{
+      const {campFees} = req.body;
+      const fees = campFees * 100;
+
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount:fees,
+        currency:'usd',
+        payment_method_types:['card']
+      });
+
+      res.send({clientSecret:paymentIntent.client_secret});
     })
 
 
@@ -192,6 +210,7 @@ app.post('/campRegistration',async(req,res)=>{
       res.send(deleteResult);
 
     });
+
 
 
     // Send a ping to confirm a successful connection
