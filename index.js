@@ -5,9 +5,9 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const { default: Stripe } = require('stripe');
 dotenv.config();
 
-const app=express();
+const app = express();
 const port = process.env.PORT || 5000;
-const stripe =require('stripe')(process.env.PAYMENT_SECRET_KEY);
+const stripe = require('stripe')(process.env.PAYMENT_SECRET_KEY);
 
 
 // midleWare
@@ -15,13 +15,13 @@ app.use(cors());
 app.use(express.json());
 
 // api
-app.get('/',(req,res)=>{
-    res.send('Campcure server is running');
+app.get('/', (req, res) => {
+  res.send('Campcure server is running');
 });
 
 
 
-const uri =`mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.hota77b.mongodb.net/?appName=Cluster0`;
+const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.hota77b.mongodb.net/?appName=Cluster0`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
@@ -37,35 +37,36 @@ async function run() {
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
 
-    const db=client.db('campcure_db');
+    const db = client.db('campcure_db');
     const campsCollection = db.collection('camps');
     const usersCollection = db.collection('users');
     const campRegistrationCollection = db.collection('campRegistration');
+    const paymentCollection = db.collection('payments');
 
 
     // get all camps
-    app.get('/camps',async(req,res)=>{
+    app.get('/camps', async (req, res) => {
       const search = req.query.search;
       const limit = parseInt(req.query.limit);
       let query = {};
 
-      if(search){
-        query={
-          $or:[
-             {
-            campName:{
-                $regex: search,
-                $options:'i'
-              }
-            },
+      if (search) {
+        query = {
+          $or: [
             {
-              location:{
+              campName: {
                 $regex: search,
                 $options: 'i'
               }
             },
             {
-              healthcareProfessional:{
+              location: {
+                $regex: search,
+                $options: 'i'
+              }
+            },
+            {
+              healthcareProfessional: {
                 $regex: search,
                 $options: 'i'
               }
@@ -76,29 +77,29 @@ async function run() {
 
       const cursor = await campsCollection.find(query);
 
-      if(limit){
+      if (limit) {
         cursor.limit(limit);
       };
 
-      const result =await cursor.toArray();
+      const result = await cursor.toArray();
       res.send(result);
     });
 
 
     // specific camp data
-    app.get('/camps/:campId',async(req,res)=>{
+    app.get('/camps/:campId', async (req, res) => {
       const campId = req.params.campId;
-      const query = {_id: new ObjectId(campId)};
+      const query = { _id: new ObjectId(campId) };
       const result = await campsCollection.findOne(query);
-      res.send(result);  
+      res.send(result);
     });
 
 
     // registered camp
-    app.get('/registeredCamp',async(req,res)=>{
+    app.get('/registeredCamp', async (req, res) => {
       const email = req.query.email;
       const query = {
-        participantEmail:email
+        participantEmail: email
       }
       const result = await campRegistrationCollection.find(query).toArray();
       res.send(result);
@@ -106,106 +107,139 @@ async function run() {
 
 
     // specific registration
-    app.get('/registeredCamp/:id',async(req,res)=>{
+    app.get('/registeredCamp/:id', async (req, res) => {
       const id = req.params.id;
-      const query = {_id:new ObjectId(id)};
+      const query = { _id: new ObjectId(id) };
 
       const result = await campRegistrationCollection.findOne(query);
       res.send(result);
     });
 
 
-    
+
     // payment Intent
-    app.post("/create-payment-intent",async(req,res)=>{
-      const {campFees} = req.body;
+    app.post("/create-payment-intent", async (req, res) => {
+      const { campFees } = req.body;
       const fees = campFees * 100;
 
       const paymentIntent = await stripe.paymentIntents.create({
-        amount:fees,
-        currency:'usd',
-        payment_method_types:['card']
+        amount: fees,
+        currency: 'usd',
+        payment_method_types: ['card']
       });
 
-      res.send({clientSecret:paymentIntent.client_secret});
-    })
+      res.send({ clientSecret: paymentIntent.client_secret });
+    });
+
+
+    // pament history and update payment status
+    app.post('/payments', async (req, res) => {
+      const paymentData = req.body;
+
+      const payment = {
+        ...paymentData,
+        paymentStatus: 'paid',
+        paidAt: new Date().toISOString()
+      };
+
+      const paymentRes = await paymentCollection.insertOne(payment);
+
+      const id = req.body.registrationId;
+      const query = { _id: new ObjectId(id) };
+
+      const updateDoc = {
+        $set: {
+          paymentStatus: 'paid',
+          transactionId: paymentData.transactionId,
+          paidAt: new Date().toISOString(),
+        }
+      };
+
+      const updateStatus = await campRegistrationCollection.updateOne(query, updateDoc);
+
+      res.send({
+        paymentRes,
+        updateStatus
+      })
+
+    });
 
 
     // Add Medical Camp
-app.post('/addCamps',async(req,res)=>{
-  const campData = req.body;
+    app.post('/addCamps', async (req, res) => {
+      const campData = req.body;
 
-  const result = await campsCollection.insertOne(campData);
-  res.send(result);
-});
+      const result = await campsCollection.insertOne(campData);
+      res.send(result);
+    });
 
 
-// save camp registration
-app.post('/campRegistration',async(req,res)=>{
-  const registrationData = req.body;
-    const {campId} = registrationData;
-  const query = {_id:new ObjectId(campId)};
+    // save camp registration
+    app.post('/campRegistration', async (req, res) => {
+      const registrationData = req.body;
+      const { campId } = registrationData;
+      const query = { _id: new ObjectId(campId) };
 
-  // save camp registrationData
-  const result = await campRegistrationCollection.insertOne(registrationData);
-  
-  // update participent count
-  const updateDoc = {
-    $inc:{
-      participantCount: 1
-    }
-  };
-  
-  const countResult = await campsCollection.updateOne(query,updateDoc);
-  
-  res.send(result);
-});
+      // save camp registrationData
+      const result = await campRegistrationCollection.insertOne(registrationData);
+
+      // update participent count
+      const updateDoc = {
+        $inc: {
+          participantCount: 1
+        }
+      };
+
+      const countResult = await campsCollection.updateOne(query, updateDoc);
+
+      res.send(result);
+    });
 
 
 
 
     // user info
-    app.post('/users',async(req,res)=>{
-     const email = req.body.email;
-     const userInfo = req.body;
-     const ExistUser = await usersCollection.findOne({email});
-     
-     if(ExistUser){
-      return res.status(200).send({message:'User already exists',inserted:false});
-     };
+    app.post('/users', async (req, res) => {
+      const email = req.body.email;
+      const userInfo = req.body;
+      const ExistUser = await usersCollection.findOne({ email });
 
-     const result = await usersCollection.insertOne(userInfo);
-     res.send(result);
+      if (ExistUser) {
+        return res.status(200).send({ message: 'User already exists', inserted: false });
+      };
+
+      const result = await usersCollection.insertOne(userInfo);
+      res.send(result);
 
     });
 
 
     // cancel regestered camp
-    app.delete('/campRegistration/:id',async(req,res)=>{
-      const  id = req.params.id;
-      const query = {_id:new ObjectId(id)};
+    app.delete('/campRegistration/:id', async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
 
-        const registration = await campRegistrationCollection.findOne(query);
+      const registration = await campRegistrationCollection.findOne(query);
 
-  if (!registration) {
-    return res.status(404).send({
-      message: 'Registration not found'
-    });
-  }
+      if (!registration) {
+        return res.status(404).send({
+          message: 'Registration not found'
+        });
+      }
 
       const deleteResult = await campRegistrationCollection.deleteOne(query);
-      
+
       // participantCount update
       const campId = registration.campId;
-      const campQuery = {_id:new ObjectId(campId)};
-      
+      const campQuery = { _id: new ObjectId(campId) };
+
       const updateDoc = {
-        $inc:{
+        $inc: {
           participantCount: -1
         }
       };
 
-      await campsCollection.updateOne(campQuery,updateDoc);
+      await campsCollection.updateOne(campQuery, updateDoc);
 
       res.send(deleteResult);
 
@@ -225,6 +259,6 @@ run().catch(console.dir);
 
 
 
-app.listen(port,()=>{
-    console.log(`campcure server is running on port ${port}`)
+app.listen(port, () => {
+  console.log(`campcure server is running on port ${port}`)
 })
