@@ -165,6 +165,21 @@ async function run() {
     });
 
 
+    // get payment history
+    app.get('/paymentHistory',async(req,res)=>{
+      const email = req.query.email;
+      const query = {
+        participentEmail:email
+      };
+
+      const result = await paymentCollection.find(query)
+      .sort({paidAt:-1})
+      .toArray();
+
+      res.send(result);
+    });
+
+
     // Add Medical Camp
     app.post('/addCamps', async (req, res) => {
       const campData = req.body;
