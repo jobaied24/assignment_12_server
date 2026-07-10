@@ -42,6 +42,7 @@ async function run() {
     const usersCollection = db.collection('users');
     const campRegistrationCollection = db.collection('campRegistration');
     const paymentCollection = db.collection('payments');
+    const feedbackCollection = db.collection('feedback');
 
 
     // get all camps
@@ -227,6 +228,19 @@ async function run() {
       res.send(result);
 
     });
+
+
+    // feedback and rating
+    app.post('/feedbackRating',async(req,res)=>{
+      const data = req.body;
+      const feedbackData = {
+        ...data,
+        createAt:new Date().toISOString()
+      };
+
+      const result = await feedbackCollection.insertOne(feedbackData);
+      res.send(result);
+    })
 
 
     // cancel regestered camp
