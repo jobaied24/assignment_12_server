@@ -8,11 +8,54 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT || 5000;
 const stripe = require('stripe')(process.env.PAYMENT_SECRET_KEY);
+const { initializeApp, cert } = require("firebase-admin/app");
+const { getAuth } = require("firebase-admin/auth");
 
 
 // midleWare
 app.use(cors());
 app.use(express.json());
+
+const decodedKey = Buffer.from(process.env.FB_SERVICE_KEY,'base64').toString('utf8');
+
+const serviceAccount = JSON.parse(decodedKey);
+
+// admin.initializeApp({
+//   credential: admin.credential.cert(serviceAccount)
+// });
+initializeApp({
+  credential: cert(serviceAccount),
+});
+
+
+// verify token
+const verifyToken = async(req,res,next) =>{
+  const authorization = req.headers?.authorization;
+
+  if(!authorization){
+    return res.status(401).send({message:'Unauthorized access'});
+  };
+
+  const token = authorization.split(' ')[1];
+
+
+  if(!token){
+    return res.status(401).send({message:'Unauthorized access'});
+  }
+
+  try{
+    const decoded = await getAuth().verifyIdToken(token);
+     req.decoded = decoded;
+
+     
+  next();
+  }
+  catch{
+    return res.status(401).send({message:'Forbidden access'})
+  }
+};
+
+
 
 // api
 app.get('/', (req, res) => {
@@ -97,7 +140,8 @@ async function run() {
 
 
     // registered camp
-    app.get('/registeredCamp', async (req, res) => {
+    app.get('/registeredCamp',verifyToken, async (req, res) => {
+
       const email = req.query.email;
       const query = {
         participantEmail: email
