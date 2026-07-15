@@ -56,6 +56,18 @@ const verifyToken = async(req,res,next) =>{
 };
 
 
+// verify Organizer
+const verifyOrganizer = async(req,res,next)=>{
+  const email = req.decoded.email;
+  const user = await usersCollection.findOne({email});
+
+  if(!user || user.role !== 'organizer'){
+    return res.status(403).send({message:'Forbidden access'});
+  };
+
+  next();
+}
+
 
 // api
 app.get('/', (req, res) => {
@@ -152,7 +164,7 @@ async function run() {
 
 
     // specific registration
-    app.get('/registeredCamp/:id', async (req, res) => {
+    app.get('/registeredCamp/:id',verifyToken, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
 
@@ -163,7 +175,7 @@ async function run() {
 
 
     // payment Intent
-    app.post("/create-payment-intent", async (req, res) => {
+    app.post("/create-payment-intent",verifyToken, async (req, res) => {
       const { campFees } = req.body;
       const fees = campFees * 100;
 
@@ -178,7 +190,7 @@ async function run() {
 
 
     // pament history and update payment status
-    app.post('/payments', async (req, res) => {
+    app.post('/payments',verifyToken, async (req, res) => {
       const paymentData = req.body;
 
       const payment = {
@@ -211,10 +223,10 @@ async function run() {
 
 
     // get payment history
-    app.get('/paymentHistory',async(req,res)=>{
+    app.get('/paymentHistory',verifyToken,async(req,res)=>{
       const email = req.query.email;
       const query = {
-        participentEmail:email
+        participantEmail:email
       };
 
       const result = await paymentCollection.find(query)
@@ -226,7 +238,7 @@ async function run() {
 
 
     // Add Medical Camp
-    app.post('/addCamps', async (req, res) => {
+    app.post('/addCamps',verifyToken,verifyOrganizer, async (req, res) => {
       const campData = req.body;
 
       const result = await campsCollection.insertOne(campData);
@@ -235,7 +247,7 @@ async function run() {
 
 
     // save camp registration
-    app.post('/campRegistration', async (req, res) => {
+    app.post('/campRegistration',verifyToken, async (req, res) => {
       const registrationData = req.body;
       const { campId } = registrationData;
       const query = { _id: new ObjectId(campId) };
@@ -256,8 +268,6 @@ async function run() {
     });
 
 
-
-
     // user info
     app.post('/users', async (req, res) => {
       const email = req.body.email;
@@ -273,9 +283,32 @@ async function run() {
 
     });
 
+    // getting user role
+    app.get('/users/:email/role',async(req,res)=>{
+     try{
+      const email = req.params.email;
+
+      if(!email){
+        return res.status(400).send({message:'Email is required'});
+      };
+      
+      const user = await usersCollection.findOne({email});
+
+      if(!user){
+        return res.status(404).send({message:'User not found'});
+      };
+
+      res.send({role:user?.role || 'participant'});
+    }
+    catch(error){
+     return res.status(500).send({message:'Failed to get user'})
+    }
+
+    });    
+
 
     // feedback and rating
-    app.post('/feedbackRating',async(req,res)=>{
+    app.post('/feedbackRating',verifyToken,async(req,res)=>{
       const data = req.body;
       const feedbackData = {
         ...data,
@@ -288,7 +321,7 @@ async function run() {
 
 
     // cancel regestered camp
-    app.delete('/campRegistration/:id', async (req, res) => {
+    app.delete('/campRegistration/:id',verifyToken, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
 
@@ -317,6 +350,16 @@ async function run() {
       res.send(deleteResult);
 
     });
+
+
+    // delete camp
+    app.delete('/delete-camp/:campId',async(req,res)=>{
+      const campId = req.params.campId;
+      const query = {_id:new ObjectId(campId)};
+
+      const result = await campsCollection.deleteOne(query);
+      res.send(result);
+    })
 
 
 
