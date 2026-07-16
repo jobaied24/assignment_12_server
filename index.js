@@ -173,6 +173,12 @@ async function run() {
     });
 
 
+    // all registered camps
+    app.get('/allRegisteredCamp',async(req,res)=>{
+     const result = await campRegistrationCollection.find().toArray();
+     res.send(result);
+    })
+
 
     // payment Intent
     app.post("/create-payment-intent",verifyToken, async (req, res) => {
@@ -223,7 +229,7 @@ async function run() {
 
 
     // get payment history
-    app.get('/paymentHistory',verifyToken,async(req,res)=>{
+     app.get('/paymentHistory',verifyToken,async(req,res)=>{
       const email = req.query.email;
       const query = {
         participantEmail:email
@@ -248,7 +254,7 @@ async function run() {
 
 
     // update medical camp
-    app.put('/update-camp/:campId',async(req,res)=>{
+    app.put('/update-camp/:campId',verifyToken,verifyOrganizer,async(req,res)=>{
       const id = req.params.campId;
       const query = {_id:new ObjectId(id)};
 
@@ -262,7 +268,7 @@ async function run() {
       const result = await campsCollection.updateOne(query,updateDoc);
       res.send(result);
       
-    })
+    });
 
 
     // save camp registration
@@ -372,7 +378,7 @@ async function run() {
 
 
     // delete camp
-    app.delete('/delete-camp/:campId',async(req,res)=>{
+    app.delete('/delete-camp/:campId',verifyToken,verifyOrganizer,async(req,res)=>{
       const campId = req.params.campId;
       const query = {_id:new ObjectId(campId)};
 
