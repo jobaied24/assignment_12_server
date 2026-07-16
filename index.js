@@ -246,6 +246,25 @@ async function run() {
     });
 
 
+
+    // update medical camp
+    app.put('/update-camp/:campId',async(req,res)=>{
+      const id = req.params.campId;
+      const query = {_id:new ObjectId(id)};
+
+      const updateDoc = {
+        $set:{
+                  ...req.body,
+        updateAt:new Date().toISOString()
+        }
+      };
+
+      const result = await campsCollection.updateOne(query,updateDoc);
+      res.send(result);
+      
+    })
+
+
     // save camp registration
     app.post('/campRegistration',verifyToken, async (req, res) => {
       const registrationData = req.body;
