@@ -292,6 +292,22 @@ async function run() {
       res.send(result);
     });
 
+    // update confirmation status
+    app.patch('/update-confirmationStatus/:id',async(req,res)=>{
+     const id = req.params.id;
+     const query = {_id:new ObjectId(id)};
+
+     const updateDoc = {
+      $set:{
+        confirmationStatus:'confirmed'
+      }
+     };
+
+     const updateRes = await campRegistrationCollection.updateOne(query,updateDoc);
+     res.send(updateDoc);
+
+    })
+
 
     // user info
     app.post('/users', async (req, res) => {
