@@ -56,18 +56,6 @@ const verifyToken = async(req,res,next) =>{
 };
 
 
-// verify Organizer
-const verifyOrganizer = async(req,res,next)=>{
-  const email = req.decoded.email;
-  const user = await usersCollection.findOne({email});
-
-  if(!user || user.role !== 'organizer'){
-    return res.status(403).send({message:'Forbidden access'});
-  };
-
-  next();
-}
-
 
 // api
 app.get('/', (req, res) => {
@@ -98,6 +86,18 @@ async function run() {
     const campRegistrationCollection = db.collection('campRegistration');
     const paymentCollection = db.collection('payments');
     const feedbackCollection = db.collection('feedback');
+
+// verify Organizer
+const verifyOrganizer = async(req,res,next)=>{
+  const email = req.decoded.email;
+  const user = await usersCollection.findOne({email});
+
+  if(!user || user.role !== 'organizer'){
+    return res.status(403).send({message:'Forbidden access'});
+  };
+
+  next();
+}
 
 
     // get all camps
@@ -363,6 +363,39 @@ async function run() {
 
     // cancel regestered camp
     app.delete('/campRegistration/:id',verifyToken, async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+
+      const registration = await campRegistrationCollection.findOne(query);
+
+      if (!registration) {
+        return res.status(404).send({
+          message: 'Registration not found'
+        });
+      }
+
+      const deleteResult = await campRegistrationCollection.deleteOne(query);
+
+      // participantCount update
+      const campId = registration.campId;
+      const campQuery = { _id: new ObjectId(campId) };
+
+      const updateDoc = {
+        $inc: {
+          participantCount: -1
+        }
+      };
+
+      await campsCollection.updateOne(campQuery, updateDoc);
+
+      res.send(deleteResult);
+
+    });
+
+
+
+    // cancel regestered camp by organizer
+    app.delete('/organizer/campRegistration/:id',verifyToken,verifyOrganizer, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
 
