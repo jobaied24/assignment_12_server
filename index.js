@@ -345,7 +345,43 @@ const verifyOrganizer = async(req,res,next)=>{
      return res.status(500).send({message:'Failed to get user'})
     }
 
-    });    
+    });  
+    
+    
+
+    // getting user data 
+    app.get('/users/:email',async(req,res)=>{
+      const email = req.params.email;
+      const result= await usersCollection.findOne({email});
+      return res.send(result);
+    });
+
+
+    // update user profile info
+    app.patch('/users/profile/:email',verifyToken,async(req,res)=>{
+     try{
+      const email = req.params.email;
+     const {phone} = req.body;
+
+     if(email !== req.decoded.email){
+      return res.status(403).send({message:'Forbidden access'});
+     };
+
+     const query = {email};
+
+     const updateDoc = {
+      $set:{
+        phone,
+      }
+     };
+
+     const result = await usersCollection.updateOne(query,updateDoc);
+     res.send(result);
+    }
+    catch(error){
+      return res.status(500).send({message:'Failed to update Profile'});
+    }
+    })
 
 
     // feedback and rating
