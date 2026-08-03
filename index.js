@@ -397,6 +397,13 @@ const verifyOrganizer = async(req,res,next)=>{
     })
 
 
+    // getting feedback and rating
+    app.get('/feedbackRating',verifyToken,async(req,res)=>{
+      const feedbackRating = await  feedbackCollection.find().toArray();
+      res.send(feedbackRating);
+    })
+
+
     // cancel regestered camp
     app.delete('/campRegistration/:id',verifyToken, async (req, res) => {
       const id = req.params.id;
