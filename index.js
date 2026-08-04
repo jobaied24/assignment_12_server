@@ -103,9 +103,12 @@ const verifyOrganizer = async(req,res,next)=>{
     // get all camps
     app.get('/camps', async (req, res) => {
       const search = req.query.search;
+      const sort = req.query.sort;
       const limit = parseInt(req.query.limit);
       let query = {};
-
+      let sortOption = {};
+     
+      // search
       if (search) {
         query = {
           $or: [
@@ -129,9 +132,27 @@ const verifyOrganizer = async(req,res,next)=>{
             }
           ]
         }
+      };
+
+
+      // sort
+      if(sort === "registered"){
+        sortOption={
+          participantCount:-1
+        }
+      }
+      else if(sort === "fees"){
+        sortOption={
+         campFees:1
+        }
+      }
+      else if(sort === "alphabetical"){
+        sortOption={
+          campName : 1
+        }
       }
 
-      const cursor = await campsCollection.find(query);
+      const cursor = await campsCollection.find(query).sort(sortOption).collation({ locale: "en", strength: 2 });
 
       if (limit) {
         cursor.limit(limit);
