@@ -16,7 +16,7 @@ const { getAuth } = require("firebase-admin/auth");
 app.use(cors());
 app.use(express.json());
 
-const decodedKey = Buffer.from(process.env.FB_SERVICE_KEY,'base64').toString('utf8');
+const decodedKey = Buffer.from(process.env.FB_SERVICE_KEY, 'base64').toString('utf8');
 
 const serviceAccount = JSON.parse(decodedKey);
 
@@ -29,29 +29,29 @@ initializeApp({
 
 
 // verify token
-const verifyToken = async(req,res,next) =>{
+const verifyToken = async (req, res, next) => {
   const authorization = req.headers?.authorization;
 
-  if(!authorization){
-    return res.status(401).send({message:'Unauthorized access'});
+  if (!authorization) {
+    return res.status(401).send({ message: 'Unauthorized access' });
   };
 
   const token = authorization.split(' ')[1];
 
 
-  if(!token){
-    return res.status(401).send({message:'Unauthorized access'});
+  if (!token) {
+    return res.status(401).send({ message: 'Unauthorized access' });
   }
 
-  try{
+  try {
     const decoded = await getAuth().verifyIdToken(token);
-     req.decoded = decoded;
+    req.decoded = decoded;
 
-     
-  next();
+
+    next();
   }
-  catch{
-    return res.status(401).send({message:'Forbidden access'})
+  catch {
+    return res.status(401).send({ message: 'Forbidden access' })
   }
 };
 
@@ -87,27 +87,29 @@ async function run() {
     const paymentCollection = db.collection('payments');
     const feedbackCollection = db.collection('feedback');
 
-// verify Organizer
-const verifyOrganizer = async(req,res,next)=>{
-  const email = req.decoded.email;
-  const user = await usersCollection.findOne({email});
+    // verify Organizer
+    const verifyOrganizer = async (req, res, next) => {
+      const email = req.decoded.email;
+      const user = await usersCollection.findOne({ email });
 
-  if(!user || user.role !== 'organizer'){
-    return res.status(403).send({message:'Forbidden access'});
-  };
+      if (!user || user.role !== 'organizer') {
+        return res.status(403).send({ message: 'Forbidden access' });
+      };
 
-  next();
-}
+      next();
+    }
 
 
     // get all camps
     app.get('/camps', async (req, res) => {
       const search = req.query.search;
       const sort = req.query.sort;
-      const limit = parseInt(req.query.limit);
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 10;
+      const skip = (page - 1) * limit;
       let query = {};
       let sortOption = {};
-     
+
       // search
       if (search) {
         query = {
@@ -136,30 +138,43 @@ const verifyOrganizer = async(req,res,next)=>{
 
 
       // sort
-      if(sort === "registered"){
-        sortOption={
-          participantCount:-1
+      if (sort === "registered") {
+        sortOption = {
+          participantCount: -1
         }
       }
-      else if(sort === "fees"){
-        sortOption={
-         campFees:1
+      else if (sort === "fees") {
+        sortOption = {
+          campFees: 1
         }
       }
-      else if(sort === "alphabetical"){
-        sortOption={
-          campName : 1
+      else if (sort === "alphabetical") {
+        sortOption = {
+          campName: 1
         }
-      }
-
-      const cursor = await campsCollection.find(query).sort(sortOption).collation({ locale: "en", strength: 2 });
-
-      if (limit) {
-        cursor.limit(limit);
       };
 
-      const result = await cursor.toArray();
-      res.send(result);
+      const total = await campsCollection.countDocuments(query);
+
+
+let cursor = campsCollection
+  .find(query)
+  .sort(sortOption)
+  .collation({ locale: "en", strength: 2 });
+
+if (page && limit) {
+  const skip = (page - 1) * limit;
+  cursor = cursor.skip(skip).limit(limit);
+}
+
+const result = await cursor.toArray();
+
+res.send({
+  result,
+  total,
+  currentPage: page || 1,
+  totalPages: limit ? Math.ceil(total / limit) : 1,
+});;
     });
 
 
@@ -173,19 +188,66 @@ const verifyOrganizer = async(req,res,next)=>{
 
 
     // registered camp
-    app.get('/registeredCamp',verifyToken, async (req, res) => {
+    app.get('/registeredCamp', verifyToken, async (req, res) => {
 
       const email = req.query.email;
-      const query = {
+      const search = req.query.search;
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 10;
+
+      const skip = (page - 1) * limit;
+
+
+      let query = {
         participantEmail: email
-      }
-      const result = await campRegistrationCollection.find(query).toArray();
-      res.send(result);
+      };
+
+      if (search) {
+        query = {
+          participantEmail: email,
+          $or: [
+            {
+              campName: {
+                $regex: search,
+                $options: "i"
+              }
+            },
+            {
+              healthcareProfessional: {
+                $regex: search,
+                $options: "i"
+              }
+            },
+            {
+              dateTime: {
+                $regex: search,
+                $options: "i"
+              }
+            }
+          ]
+        }
+      };
+
+      const total = await campRegistrationCollection.countDocuments(query);
+
+
+      const result = await campRegistrationCollection
+        .find(query)
+        .skip(skip)
+        .limit(limit)
+        .toArray();
+
+      res.send({
+        result,
+        total,
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+      });
     });
 
 
     // specific registration
-    app.get('/registeredCamp/:id',verifyToken, async (req, res) => {
+    app.get('/registeredCamp/:id', verifyToken, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
 
@@ -195,14 +257,61 @@ const verifyOrganizer = async(req,res,next)=>{
 
 
     // all registered camps
-    app.get('/allRegisteredCamp',async(req,res)=>{
-     const result = await campRegistrationCollection.find().toArray();
-     res.send(result);
+    app.get('/allRegisteredCamp', async (req, res) => {
+    const search = req.query.search;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+
+
+    const skip = (page - 1) * limit ;
+
+    let query ={};
+
+    if(search){
+      query = {
+        $or: [
+          {
+            campName:{
+              $regex:search,
+              $options:'i'
+            }
+          },
+          {
+            participantName:{
+              $regex:search,
+            $options:'i'
+            }
+          },
+          {
+            campDate:{
+              $regex:search,
+            $options:'i'
+            }
+          }
+
+        ]
+      }
+    };
+
+    const total = await campRegistrationCollection.countDocuments(query);
+
+    
+
+      const result = await campRegistrationCollection.find(query)
+      .skip(skip)
+      .limit(limit)
+      .toArray();
+
+      res.send({
+        result,
+        total,
+        totalPages:Math.ceil(total / limit)
+    });
     })
 
 
     // payment Intent
-    app.post("/create-payment-intent",verifyToken, async (req, res) => {
+    app.post("/create-payment-intent", verifyToken, async (req, res) => {
       const { campFees } = req.body;
       const fees = campFees * 100;
 
@@ -217,7 +326,7 @@ const verifyOrganizer = async(req,res,next)=>{
 
 
     // pament history and update payment status
-    app.post('/payments',verifyToken, async (req, res) => {
+    app.post('/payments', verifyToken, async (req, res) => {
       const paymentData = req.body;
 
       const payment = {
@@ -250,22 +359,63 @@ const verifyOrganizer = async(req,res,next)=>{
 
 
     // get payment history
-     app.get('/paymentHistory',verifyToken,async(req,res)=>{
+    app.get('/paymentHistory', verifyToken, async (req, res) => {
       const email = req.query.email;
-      const query = {
-        participantEmail:email
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 10;
+      const search = req.query.search || '';
+
+      const skip = (page - 1) * limit;
+      
+      let query = {
+        participantEmail: email
       };
 
-      const result = await paymentCollection.find(query)
-      .sort({paidAt:-1})
-      .toArray();
+      if(search){
+        query={
+          participantEmail:email,
+          $or:[
+            {
+              campName:{
+                $regex:search,
+                $options:'i'
+              }
+            },
+            {
+              healthcareProfessional:{
+                $regex:search,
+                $options:'i'
+              }
+            },
+            {
+              campDate:{
+                $regex:search,
+                $options:'i'
+              }
+            }
+          ]
+        }
+      };
 
-      res.send(result);
+
+      const total = await paymentCollection.countDocuments(query);
+
+      const result = await paymentCollection.find(query)
+      .skip(skip)
+        .sort({ paidAt: -1 })
+        .limit(limit)
+        .toArray();
+
+      res.send({
+        result,
+        total,
+        totalPages:Math.ceil(total / limit)
+    });
     });
 
 
     // Add Medical Camp
-    app.post('/addCamps',verifyToken,verifyOrganizer, async (req, res) => {
+    app.post('/addCamps', verifyToken, verifyOrganizer, async (req, res) => {
       const campData = req.body;
 
       const result = await campsCollection.insertOne(campData);
@@ -275,25 +425,25 @@ const verifyOrganizer = async(req,res,next)=>{
 
 
     // update medical camp
-    app.put('/update-camp/:campId',verifyToken,verifyOrganizer,async(req,res)=>{
+    app.put('/update-camp/:campId', verifyToken, verifyOrganizer, async (req, res) => {
       const id = req.params.campId;
-      const query = {_id:new ObjectId(id)};
+      const query = { _id: new ObjectId(id) };
 
       const updateDoc = {
-        $set:{
-                  ...req.body,
-        updateAt:new Date().toISOString()
+        $set: {
+          ...req.body,
+          updateAt: new Date().toISOString()
         }
       };
 
-      const result = await campsCollection.updateOne(query,updateDoc);
+      const result = await campsCollection.updateOne(query, updateDoc);
       res.send(result);
-      
+
     });
 
 
     // save camp registration
-    app.post('/campRegistration',verifyToken, async (req, res) => {
+    app.post('/campRegistration', verifyToken, async (req, res) => {
       const registrationData = req.body;
       const { campId } = registrationData;
       const query = { _id: new ObjectId(campId) };
@@ -314,18 +464,18 @@ const verifyOrganizer = async(req,res,next)=>{
     });
 
     // update confirmation status
-    app.patch('/update-confirmationStatus/:id',async(req,res)=>{
-     const id = req.params.id;
-     const query = {_id:new ObjectId(id)};
+    app.patch('/update-confirmationStatus/:id', async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
 
-     const updateDoc = {
-      $set:{
-        confirmationStatus:'confirmed'
-      }
-     };
+      const updateDoc = {
+        $set: {
+          confirmationStatus: 'confirmed'
+        }
+      };
 
-     const updateRes = await campRegistrationCollection.updateOne(query,updateDoc);
-     res.send(updateDoc);
+      const updateRes = await campRegistrationCollection.updateOne(query, updateDoc);
+      res.send(updateDoc);
 
     })
 
@@ -346,71 +496,71 @@ const verifyOrganizer = async(req,res,next)=>{
     });
 
     // getting user role
-    app.get('/users/:email/role',async(req,res)=>{
-     try{
-      const email = req.params.email;
+    app.get('/users/:email/role', async (req, res) => {
+      try {
+        const email = req.params.email;
 
-      if(!email){
-        return res.status(400).send({message:'Email is required'});
-      };
-      
-      const user = await usersCollection.findOne({email});
+        if (!email) {
+          return res.status(400).send({ message: 'Email is required' });
+        };
 
-      if(!user){
-        return res.status(404).send({message:'User not found'});
-      };
+        const user = await usersCollection.findOne({ email });
 
-      res.send({role:user?.role || 'participant'});
-    }
-    catch(error){
-     return res.status(500).send({message:'Failed to get user'})
-    }
+        if (!user) {
+          return res.status(404).send({ message: 'User not found' });
+        };
 
-    });  
-    
-    
+        res.send({ role: user?.role || 'participant' });
+      }
+      catch (error) {
+        return res.status(500).send({ message: 'Failed to get user' })
+      }
+
+    });
+
+
 
     // getting user data 
-    app.get('/users/:email',async(req,res)=>{
+    app.get('/users/:email', async (req, res) => {
       const email = req.params.email;
-      const result= await usersCollection.findOne({email});
+      const result = await usersCollection.findOne({ email });
       return res.send(result);
     });
 
 
     // update user profile info
-    app.patch('/users/profile/:email',verifyToken,async(req,res)=>{
-     try{
-      const email = req.params.email;
-     const {phone} = req.body;
+    app.patch('/users/profile/:email', verifyToken, async (req, res) => {
+      try {
+        const email = req.params.email;
+        const { phone } = req.body;
 
-     if(email !== req.decoded.email){
-      return res.status(403).send({message:'Forbidden access'});
-     };
+        if (email !== req.decoded.email) {
+          return res.status(403).send({ message: 'Forbidden access' });
+        };
 
-     const query = {email};
+        const query = { email };
 
-     const updateDoc = {
-      $set:{
-        phone,
+        const updateDoc = {
+          $set: {
+            phone,
+          }
+        };
+
+        const result = await usersCollection.updateOne(query, updateDoc);
+        res.send(result);
       }
-     };
-
-     const result = await usersCollection.updateOne(query,updateDoc);
-     res.send(result);
-    }
-    catch(error){
-      return res.status(500).send({message:'Failed to update Profile'});
-    }
+      catch (error) {
+        return res.status(500).send({ message: 'Failed to update Profile' });
+      }
     })
 
 
     // feedback and rating
-    app.post('/feedbackRating',verifyToken,async(req,res)=>{
+    app.post('/feedbackRating', verifyToken, async (req, res) => {
       const data = req.body;
       const feedbackData = {
         ...data,
-        createAt:new Date().toISOString()
+        createAt: new Date().toISOString()
       };
 
       const result = await feedbackCollection.insertOne(feedbackData);
@@ -419,14 +569,14 @@ const verifyOrganizer = async(req,res,next)=>{
 
 
     // getting feedback and rating
-    app.get('/feedbackRating',verifyToken,async(req,res)=>{
-      const feedbackRating = await  feedbackCollection.find().toArray();
+    app.get('/feedbackRating', verifyToken, async (req, res) => {
+      const feedbackRating = await feedbackCollection.find().toArray();
       res.send(feedbackRating);
     })
 
 
     // cancel regestered camp
-    app.delete('/campRegistration/:id',verifyToken, async (req, res) => {
+    app.delete('/campRegistration/:id', verifyToken, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
 
@@ -459,7 +609,7 @@ const verifyOrganizer = async(req,res,next)=>{
 
 
     // cancel regestered camp by organizer
-    app.delete('/organizer/campRegistration/:id',verifyToken,verifyOrganizer, async (req, res) => {
+    app.delete('/organizer/campRegistration/:id', verifyToken, verifyOrganizer, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
 
@@ -491,9 +641,9 @@ const verifyOrganizer = async(req,res,next)=>{
 
 
     // delete camp
-    app.delete('/delete-camp/:campId',verifyToken,verifyOrganizer,async(req,res)=>{
+    app.delete('/delete-camp/:campId', verifyToken, verifyOrganizer, async (req, res) => {
       const campId = req.params.campId;
-      const query = {_id:new ObjectId(campId)};
+      const query = { _id: new ObjectId(campId) };
 
       const result = await campsCollection.deleteOne(query);
       res.send(result);
