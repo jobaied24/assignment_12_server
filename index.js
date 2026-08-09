@@ -7,7 +7,10 @@ dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 5000;
+
 const stripe = require('stripe')(process.env.PAYMENT_SECRET_KEY);
+
+
 const { initializeApp, cert } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
 
@@ -652,17 +655,20 @@ res.send({
 
 
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
+    // await client.db("admin").command({ ping: 1 });
+    // console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
   }
 }
-run().catch(console.dir);
+
+ 
+run().then(() => {
+  app.listen(port, () => {
+    console.log(`Server is running on port ${port}`);
+  });
+}).catch(console.dir);
 
 
-
-app.listen(port, () => {
-  console.log(`campcure server is running on port ${port}`)
-})
+module.exports = app;
