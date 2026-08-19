@@ -2,17 +2,14 @@
   "name": "assignment12_server",
   "version": "1.0.0",
   "main": "index.js",
-"scripts": {
-  "test": "echo \"Error: no test specified\"",
-  "vercel-build": "node -v"
-},
+  "scripts": {
+    "start": "node index.js"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@stripe/react-stripe-js": "^6.7.0",
-    "@stripe/stripe-js": "^9.9.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
