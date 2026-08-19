@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-const { default: Stripe } = require('stripe');
+
 dotenv.config();
 
 const app = express();
@@ -664,11 +664,6 @@ res.send({
 }
 
  
-run().then(() => {
-  app.listen(port, () => {
-    console.log(`Server is running on port ${port}`);
-  });
-}).catch(console.dir);
-
+run().catch(console.dir);
 
 module.exports = app;
